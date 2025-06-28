@@ -1,44 +1,58 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
-public class MoveAircraft : MonoBehaviour
+public class Moveaircraft : MonoBehaviour
 {
-    private Rigidbody rb;
+    private bool canJump = true;
+    public float jumpCooldown = 2.0f;
 
-    public float acceleration = 20f;
-    public float rotationSpeed = 100f;
-    public float maxSpeed = 15f;
+    public float speed = 3.0f;
+    public float maxSpeed = 6.0f;
+    public float rotationSpeed = 360.0f;
+    public float jumpForce = 5.0f;
+    public float hoverHeight = 2.0f;
+
+    private Rigidbody rb;
 
     void Start()
     {
         rb = GetComponent<Rigidbody>();
-
-        rb.useGravity = false;
-
-        rb.constraints = RigidbodyConstraints.FreezePositionY |
-                         RigidbodyConstraints.FreezeRotationX |
-                         RigidbodyConstraints.FreezeRotationZ;
+        rb.freezeRotation = true;
     }
 
     void FixedUpdate()
     {
-        float moveInput = Input.GetAxis("Vertical");
-        float turnInput = Input.GetAxis("Horizontal");
+        float moveHorizontal = Input.GetAxis("Horizontal");
+        float moveVertical = Input.GetAxis("Vertical");
 
-        Quaternion deltaRotation = Quaternion.Euler(0f, turnInput * rotationSpeed * Time.fixedDeltaTime, 0f);
-        rb.MoveRotation(rb.rotation * deltaRotation);
+        float rotationY = Input.GetAxis("Mouse X") * rotationSpeed * Time.deltaTime;
+        transform.Rotate(0, rotationY, 0);
 
-        Vector3 forceDirection = new Vector3(transform.forward.x, 0f, transform.forward.z).normalized;
-        Vector3 force = forceDirection * moveInput * acceleration;
+        Vector3 movement = transform.forward * moveVertical + transform.right * moveHorizontal;
+        rb.AddForce(movement.normalized * speed, ForceMode.Acceleration);
 
-        rb.AddForce(force);
+        Vector3 clampedVelocity = Vector3.ClampMagnitude(rb.linearVelocity, maxSpeed);
+        rb.linearVelocity = clampedVelocity;
 
-        Vector3 horizontalVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
-        if (horizontalVelocity.magnitude > maxSpeed)
+        if (Input.GetKeyDown(KeyCode.Space) && canJump)
         {
-            horizontalVelocity = horizontalVelocity.normalized * maxSpeed;
-            rb.linearVelocity = new Vector3(horizontalVelocity.x, 0f, horizontalVelocity.z);
+            canJump = false;
+            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+            StartCoroutine(EnableJump());
         }
 
-        rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+        if (Physics.Raycast(transform.position, -Vector3.up, out RaycastHit hit, hoverHeight))
+        {
+            float distanceToGround = hit.distance;
+            float adjustment = Mathf.Clamp((hoverHeight - distanceToGround) * 10f, 0, jumpForce);
+            rb.AddForce(Vector3.up * adjustment, ForceMode.Acceleration);
+        }
+    }
+
+    IEnumerator EnableJump()
+    {
+        yield return new WaitForSeconds(jumpCooldown);
+        canJump = true;
     }
 }
